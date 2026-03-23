@@ -199,7 +199,7 @@
 
     table {
       width: 100%;
-      min-width: 820px;
+      min-width: 980px;
       border-collapse: collapse;
       background: rgba(7, 17, 34, 0.28);
       border-radius: 16px;
@@ -286,7 +286,7 @@
   <div class="container">
     <header class="header">
       <h1>Учёт дефолтов по облигациям</h1>
-      <p>Добавляйте сведения по каждому случаю дефолта и сразу получайте общую статистику.</p>
+      <p>Добавляйте сведения по каждому случаю дефолта, указывайте выпуск облигаций и сразу получайте общую статистику по эмитентам.</p>
     </header>
 
     <section class="stats">
@@ -316,6 +316,11 @@
           </div>
 
           <div class="field">
+            <label for="issue">Выпуск облигаций</label>
+            <input id="issue" name="issue" type="text" placeholder="Например: БО-001Р-01" />
+          </div>
+
+          <div class="field">
             <label for="pvo">ПВО (при наличии)</label>
             <input id="pvo" name="pvo" type="text" placeholder="Например: ООО «Представитель»" />
           </div>
@@ -336,14 +341,14 @@
           </div>
         </form>
         <div class="hint">
-          Количество эмитентов считается по уникальным наименованиям без учета регистра. Все данные сохраняются в браузере на этом устройстве.
+          Можно учитывать несколько выпусков одного эмитента отдельно. При этом количество эмитентов считается по уникальным наименованиям без учета регистра, а общая сумма задолженности суммируется по всем записям. Все данные сохраняются в браузере на этом устройстве.
         </div>
       </div>
 
       <div class="table-card">
         <div class="toolbar">
           <h2>Реестр дефолтов</h2>
-          <input id="searchInput" type="text" placeholder="Поиск по эмитенту или ПВО" />
+          <input id="searchInput" type="text" placeholder="Поиск по эмитенту, выпуску или ПВО" />
         </div>
 
         <div id="emptyState" class="empty">Пока нет записей. Добавьте первый случай дефолта слева.</div>
@@ -353,6 +358,7 @@
             <thead>
               <tr>
                 <th>Эмитент</th>
+                <th>Выпуск</th>
                 <th>ПВО</th>
                 <th>Сумма задолженности</th>
                 <th>Дата первого дефолта</th>
@@ -374,6 +380,7 @@
     const form = document.getElementById('defaultForm');
     const recordIdInput = document.getElementById('recordId');
     const issuerInput = document.getElementById('issuer');
+    const issueInput = document.getElementById('issue');
     const pvoInput = document.getElementById('pvo');
     const debtInput = document.getElementById('debt');
     const dateInput = document.getElementById('date');
@@ -394,7 +401,15 @@
     function loadRecords() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        return raw ? JSON.parse(raw) : [];
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed.map((item) => ({
+          id: item.id || crypto.randomUUID(),
+          issuer: String(item.issuer || '').trim(),
+          issue: String(item.issue || '').trim(),
+          pvo: String(item.pvo || '').trim(),
+          debt: Number(item.debt) || 0,
+          date: item.date || '',
+        })) : [];
       } catch (error) {
         console.error('Ошибка чтения данных:', error);
         return [];
@@ -454,6 +469,7 @@
 
       return records.filter((item) => {
         return String(item.issuer).toLowerCase().includes(query)
+          || String(item.issue || '').toLowerCase().includes(query)
           || String(item.pvo || '').toLowerCase().includes(query);
       });
     }
@@ -483,6 +499,7 @@
         return `
           <tr>
             <td>${escapeHtml(item.issuer)}</td>
+            <td>${item.issue ? escapeHtml(item.issue) : '—'}</td>
             <td>${item.pvo ? escapeHtml(item.pvo) : '—'}</td>
             <td>${formatCurrency(item.debt)}</td>
             <td>${formatDate(item.date)}</td>
@@ -512,6 +529,7 @@
       event.preventDefault();
 
       const issuer = issuerInput.value.trim();
+      const issue = issueInput.value.trim();
       const pvo = pvoInput.value.trim();
       const debt = Number(debtInput.value);
       const date = dateInput.value;
@@ -525,6 +543,7 @@
       const payload = {
         id: existingId || crypto.randomUUID(),
         issuer,
+        issue,
         pvo,
         debt,
         date,
@@ -547,6 +566,7 @@
 
       recordIdInput.value = item.id;
       issuerInput.value = item.issuer;
+      issueInput.value = item.issue || '';
       pvoInput.value = item.pvo || '';
       debtInput.value = item.debt;
       dateInput.value = item.date;
@@ -560,7 +580,8 @@
       const item = records.find((record) => record.id === id);
       if (!item) return;
 
-      const confirmed = window.confirm(`Удалить запись по эмитенту «${item.issuer}»?`);
+      const label = item.issue ? `эмитенту «${item.issuer}», выпуск «${item.issue}»` : `эмитенту «${item.issuer}»`;
+      const confirmed = window.confirm(`Удалить запись по ${label}?`);
       if (!confirmed) return;
 
       records = records.filter((record) => record.id !== id);
