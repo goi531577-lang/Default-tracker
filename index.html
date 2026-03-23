@@ -17,6 +17,7 @@
       --accent-2: #95d0ff;
       --danger: #ff8f8f;
       --success: #8ef0c5;
+      --warning: #ffe7a3;
       --shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
     }
 
@@ -134,6 +135,10 @@
     input:focus {
       border-color: var(--accent);
       transform: translateY(-1px);
+    }
+
+    input::placeholder {
+      color: rgba(243, 247, 255, 0.5);
     }
 
     .actions {
@@ -254,6 +259,57 @@
       line-height: 1.45;
     }
 
+    .directory-status {
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--muted);
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .directory-status.ready {
+      color: var(--success);
+      border-color: rgba(142, 240, 197, 0.3);
+      background: rgba(142, 240, 197, 0.08);
+    }
+
+    .directory-status.error {
+      color: var(--warning);
+      border-color: rgba(255, 231, 163, 0.25);
+      background: rgba(255, 231, 163, 0.07);
+    }
+
+    .chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-height: 8px;
+    }
+
+    .chip {
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(124, 182, 255, 0.28);
+      background: rgba(124, 182, 255, 0.12);
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.2;
+      cursor: pointer;
+    }
+
+    .chip:hover {
+      background: rgba(124, 182, 255, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .small-note {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
     .footer-note {
       margin-top: 16px;
       color: var(--muted);
@@ -278,6 +334,10 @@
       .container {
         width: min(100%, calc(100% - 20px));
         padding-top: 20px;
+      }
+
+      .toolbar input {
+        max-width: 100%;
       }
     }
   </style>
@@ -312,12 +372,17 @@
 
           <div class="field">
             <label for="issuer">Эмитент</label>
-            <input id="issuer" name="issuer" type="text" placeholder="Например: ООО «Пример»" required />
+            <input id="issuer" name="issuer" type="text" placeholder="Например: ООО «Пример»" list="issuerSuggestions" autocomplete="off" required />
+            <datalist id="issuerSuggestions"></datalist>
+            <div class="small-note">Начните вводить название эмитента — появятся подсказки из локального справочника.</div>
           </div>
 
           <div class="field">
             <label for="issue">Выпуск облигаций</label>
-            <input id="issue" name="issue" type="text" placeholder="Например: БО-001Р-01" />
+            <input id="issue" name="issue" type="text" placeholder="Например: БО-001Р-01" list="issueSuggestions" autocomplete="off" />
+            <datalist id="issueSuggestions"></datalist>
+            <div class="chip-list" id="issueChips"></div>
+            <div class="small-note">После выбора эмитента ниже появятся подходящие выпуски. Нажмите на выпуск, чтобы подставить его в поле.</div>
           </div>
 
           <div class="field">
@@ -335,13 +400,17 @@
             <input id="date" name="date" type="date" required />
           </div>
 
+          <div class="field">
+            <div class="directory-status" id="directoryStatus">Загрузка локального справочника выпусков…</div>
+          </div>
+
           <div class="actions">
             <button class="primary" type="submit" id="submitBtn">Сохранить</button>
             <button class="secondary" type="button" id="resetBtn">Очистить</button>
           </div>
         </form>
         <div class="hint">
-          Можно учитывать несколько выпусков одного эмитента отдельно. При этом количество эмитентов считается по уникальным наименованиям без учета регистра, а общая сумма задолженности суммируется по всем записям. Все данные сохраняются в браузере на этом устройстве.
+          Можно учитывать несколько выпусков одного эмитента отдельно. При этом количество эмитентов считается по уникальным наименованиям без учета регистра, а общая сумма задолженности суммируется по всем записям. Для подсказок используйте файл <strong>issuer-issues.json</strong> рядом с <strong>index.html</strong>.
         </div>
       </div>
 
@@ -376,6 +445,7 @@
 
   <script>
     const STORAGE_KEY = 'bond-default-tracker-records-v1';
+    const DIRECTORY_URL = './issuer-issues.json';
 
     const form = document.getElementById('defaultForm');
     const recordIdInput = document.getElementById('recordId');
@@ -396,7 +466,13 @@
     const tableWrap = document.getElementById('tableWrap');
     const searchInput = document.getElementById('searchInput');
 
+    const issuerSuggestions = document.getElementById('issuerSuggestions');
+    const issueSuggestions = document.getElementById('issueSuggestions');
+    const issueChips = document.getElementById('issueChips');
+    const directoryStatus = document.getElementById('directoryStatus');
+
     let records = loadRecords();
+    let issuerDirectory = [];
 
     function loadRecords() {
       try {
@@ -420,8 +496,15 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
     }
 
+    function normalizeText(value) {
+      return String(value || '')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+    }
+
     function normalizeIssuer(value) {
-      return String(value || '').trim().toLowerCase();
+      return normalizeText(value);
     }
 
     function formatCurrency(value) {
@@ -445,6 +528,14 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+    }
+
+    function sortRu(values) {
+      return [...values].sort((a, b) => String(a).localeCompare(String(b), 'ru'));
+    }
+
+    function dedupe(values) {
+      return Array.from(new Set(values.filter(Boolean)));
     }
 
     function calculateStats(items) {
@@ -522,6 +613,8 @@
       recordIdInput.value = '';
       formTitle.textContent = 'Добавить дефолт';
       submitBtn.textContent = 'Сохранить';
+      updateIssuerSuggestions('');
+      updateIssueSuggestions();
       issuerInput.focus();
     }
 
@@ -560,6 +653,140 @@
       resetForm();
     }
 
+    function renderDatalist(target, values) {
+      target.innerHTML = values.map((value) => `<option value="${escapeHtml(value)}"></option>`).join('');
+    }
+
+    function renderIssueChips(values) {
+      if (!values.length) {
+        issueChips.innerHTML = '';
+        return;
+      }
+
+      issueChips.innerHTML = values.map((value) => {
+        const safe = escapeHtml(value);
+        return `<button class="chip" type="button" onclick="pickIssue('${safe}')">${safe}</button>`;
+      }).join('');
+    }
+
+    function parseDirectory(data) {
+      const entries = [];
+
+      if (Array.isArray(data)) {
+        for (const item of data) {
+          if (!item) continue;
+          const issuer = String(item.issuer || '').trim();
+          if (!issuer) continue;
+          const issues = Array.isArray(item.issues) ? item.issues.map((value) => String(value || '').trim()).filter(Boolean) : [];
+          entries.push({
+            issuer,
+            issuerKey: normalizeIssuer(issuer),
+            issues: dedupe(issues),
+          });
+        }
+      } else if (data && typeof data === 'object') {
+        for (const [issuerRaw, issuesRaw] of Object.entries(data)) {
+          const issuer = String(issuerRaw || '').trim();
+          if (!issuer) continue;
+          const issues = Array.isArray(issuesRaw)
+            ? issuesRaw.map((value) => String(value || '').trim()).filter(Boolean)
+            : [];
+          entries.push({
+            issuer,
+            issuerKey: normalizeIssuer(issuer),
+            issues: dedupe(issues),
+          });
+        }
+      }
+
+      return entries.sort((a, b) => a.issuer.localeCompare(b.issuer, 'ru'));
+    }
+
+    function setDirectoryStatus(message, type = '') {
+      directoryStatus.textContent = message;
+      directoryStatus.className = 'directory-status';
+      if (type) {
+        directoryStatus.classList.add(type);
+      }
+    }
+
+    function getMatchingIssuers(query) {
+      const normalizedQuery = normalizeIssuer(query);
+
+      if (!normalizedQuery) {
+        return issuerDirectory.slice(0, 50);
+      }
+
+      const exact = [];
+      const startsWith = [];
+      const includes = [];
+
+      for (const entry of issuerDirectory) {
+        if (entry.issuerKey === normalizedQuery) {
+          exact.push(entry);
+        } else if (entry.issuerKey.startsWith(normalizedQuery)) {
+          startsWith.push(entry);
+        } else if (entry.issuerKey.includes(normalizedQuery)) {
+          includes.push(entry);
+        }
+      }
+
+      return [...exact, ...startsWith, ...includes].slice(0, 50);
+    }
+
+    function updateIssuerSuggestions(query) {
+      const matches = getMatchingIssuers(query).map((entry) => entry.issuer);
+      renderDatalist(issuerSuggestions, sortRu(dedupe(matches)));
+    }
+
+    function updateIssueSuggestions() {
+      const issuerQuery = issuerInput.value.trim();
+      const normalizedIssuer = normalizeIssuer(issuerQuery);
+
+      let matchedEntries = [];
+      if (normalizedIssuer) {
+        const exactMatches = issuerDirectory.filter((entry) => entry.issuerKey === normalizedIssuer);
+        matchedEntries = exactMatches.length ? exactMatches : getMatchingIssuers(issuerQuery).slice(0, 10);
+      }
+
+      const issues = dedupe(
+        matchedEntries.flatMap((entry) => Array.isArray(entry.issues) ? entry.issues : [])
+      );
+
+      const sortedIssues = sortRu(issues).slice(0, 30);
+      renderDatalist(issueSuggestions, sortedIssues);
+      renderIssueChips(sortedIssues.slice(0, 12));
+    }
+
+    async function loadIssuerDirectory() {
+      try {
+        const response = await fetch(DIRECTORY_URL, { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        issuerDirectory = parseDirectory(data);
+
+        const totalIssues = issuerDirectory.reduce((sum, entry) => sum + entry.issues.length, 0);
+        setDirectoryStatus(`Справочник загружен: ${issuerDirectory.length} эмитентов, ${totalIssues} выпусков. Чтобы обновить подсказки, замените файл issuer-issues.json в репозитории.`, 'ready');
+        updateIssuerSuggestions(issuerInput.value);
+        updateIssueSuggestions();
+      } catch (error) {
+        console.error('Ошибка загрузки справочника выпусков:', error);
+        issuerDirectory = [];
+        renderDatalist(issuerSuggestions, []);
+        renderDatalist(issueSuggestions, []);
+        renderIssueChips([]);
+        setDirectoryStatus('Справочник выпусков не загружен. Добавьте рядом с index.html файл issuer-issues.json или проверьте его формат.', 'error');
+      }
+    }
+
+    window.pickIssue = function pickIssue(value) {
+      issueInput.value = String(value || '').trim();
+      issueInput.focus();
+    };
+
     window.editRecord = function editRecord(id) {
       const item = records.find((record) => record.id === id);
       if (!item) return;
@@ -572,6 +799,8 @@
       dateInput.value = item.date;
       formTitle.textContent = 'Изменить запись';
       submitBtn.textContent = 'Сохранить изменения';
+      updateIssuerSuggestions(item.issuer);
+      updateIssueSuggestions();
       issuerInput.focus();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -597,7 +826,30 @@
     resetBtn.addEventListener('click', resetForm);
     searchInput.addEventListener('input', render);
 
+    issuerInput.addEventListener('input', () => {
+      updateIssuerSuggestions(issuerInput.value);
+      updateIssueSuggestions();
+
+      if (!issuerInput.value.trim()) {
+        issueInput.value = '';
+      }
+    });
+
+    issuerInput.addEventListener('focus', () => {
+      updateIssuerSuggestions(issuerInput.value);
+      updateIssueSuggestions();
+    });
+
+    issuerInput.addEventListener('change', () => {
+      updateIssueSuggestions();
+    });
+
+    issueInput.addEventListener('focus', updateIssueSuggestions);
+
     render();
+    updateIssuerSuggestions('');
+    updateIssueSuggestions();
+    loadIssuerDirectory();
   </script>
 </body>
 </html>
