@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Учёт дефолтов по облигациям</title>
+  <style>
+    :root {
+      --bg-1: #0b1f3a;
+      --bg-2: #12335d;
+      --panel: rgba(255, 255, 255, 0.12);
+      --panel-strong: rgba(255, 255, 255, 0.18);
+      --border: rgba(255, 255, 255, 0.18);
+      --text: #f3f7ff;
+      --muted: #c8d6f3;
+      --accent: #7cb6ff;
+      --accent-2: #95d0ff;
+      --danger: #ff8f8f;
+      --success: #8ef0c5;
+      --shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      background:
+        radial-gradient(circle at top right, rgba(124, 182, 255, 0.18), transparent 30%),
+        linear-gradient(135deg, var(--bg-1), var(--bg-2));
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .container {
+      width: min(1200px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 40px;
+    }
+
+    .header {
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 4vw, 38px);
+      line-height: 1.1;
+    }
+
+    .header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin: 24px 0;
+    }
+
+    .card, .form-card, .table-card {
+      background: var(--panel);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .card {
+      padding: 20px;
+    }
+
+    .card-title {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    .card-value {
+      font-size: clamp(28px, 3.5vw, 36px);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    .form-card {
+      padding: 20px;
+      position: sticky;
+      top: 18px;
+    }
+
+    .form-card h2,
+    .table-card h2 {
+      margin: 0 0 16px;
+      font-size: 22px;
+    }
+
+    form {
+      display: grid;
+      gap: 14px;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+    }
+
+    label {
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    input {
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 12px;
+      padding: 12px 14px;
+      background: rgba(9, 22, 43, 0.55);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s ease, transform 0.2s ease;
+      font-size: 15px;
+    }
+
+    input:focus {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    .primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #06213f;
+    }
+
+    .secondary {
+      background: rgba(255, 255, 255, 0.12);
+      color: var(--text);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    .danger {
+      background: rgba(255, 143, 143, 0.15);
+      color: #ffdede;
+      border: 1px solid rgba(255, 143, 143, 0.35);
+    }
+
+    .table-card {
+      padding: 20px;
+      overflow: hidden;
+    }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .toolbar input {
+      max-width: 320px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 16px;
+    }
+
+    table {
+      width: 100%;
+      min-width: 820px;
+      border-collapse: collapse;
+      background: rgba(7, 17, 34, 0.28);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    thead {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    th, td {
+      text-align: left;
+      padding: 14px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      vertical-align: top;
+      font-size: 14px;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    tbody tr:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .row-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .row-actions button {
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+
+    .empty {
+      padding: 28px;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed rgba(255, 255, 255, 0.18);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .hint {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 8px;
+      line-height: 1.45;
+    }
+
+    .footer-note {
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .form-card {
+        position: static;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      .container {
+        width: min(100%, calc(100% - 20px));
+        padding-top: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Учёт дефолтов по облигациям</h1>
+      <p>Добавляйте сведения по каждому случаю дефолта и сразу получайте общую статистику.</p>
+    </header>
+
+    <section class="stats">
+      <div class="card">
+        <div class="card-title">Всего дефолтов</div>
+        <div class="card-value" id="totalDefaults">0</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Эмитентов, допустивших дефолт</div>
+        <div class="card-value" id="totalIssuers">0</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Общая сумма задолженности</div>
+        <div class="card-value" id="totalDebt">0 ₽</div>
+      </div>
+    </section>
+
+    <section class="layout">
+      <div class="form-card">
+        <h2 id="formTitle">Добавить дефолт</h2>
+        <form id="defaultForm">
+          <input type="hidden" id="recordId" />
+
+          <div class="field">
+            <label for="issuer">Эмитент</label>
+            <input id="issuer" name="issuer" type="text" placeholder="Например: ООО «Пример»" required />
+          </div>
+
+          <div class="field">
+            <label for="pvo">ПВО (при наличии)</label>
+            <input id="pvo" name="pvo" type="text" placeholder="Например: ООО «Представитель»" />
+          </div>
+
+          <div class="field">
+            <label for="debt">Сумма задолженности, ₽</label>
+            <input id="debt" name="debt" type="number" step="0.01" min="0" placeholder="0.00" required />
+          </div>
+
+          <div class="field">
+            <label for="date">Дата первого дефолта</label>
+            <input id="date" name="date" type="date" required />
+          </div>
+
+          <div class="actions">
+            <button class="primary" type="submit" id="submitBtn">Сохранить</button>
+            <button class="secondary" type="button" id="resetBtn">Очистить</button>
+          </div>
+        </form>
+        <div class="hint">
+          Количество эмитентов считается по уникальным наименованиям без учета регистра. Все данные сохраняются в браузере на этом устройстве.
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="toolbar">
+          <h2>Реестр дефолтов</h2>
+          <input id="searchInput" type="text" placeholder="Поиск по эмитенту или ПВО" />
+        </div>
+
+        <div id="emptyState" class="empty">Пока нет записей. Добавьте первый случай дефолта слева.</div>
+
+        <div class="table-wrap" id="tableWrap" style="display:none;">
+          <table>
+            <thead>
+              <tr>
+                <th>Эмитент</th>
+                <th>ПВО</th>
+                <th>Сумма задолженности</th>
+                <th>Дата первого дефолта</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+
+        <div class="footer-note">Для редактирования нажмите «Изменить». Для удаления записи нажмите «Удалить».</div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'bond-default-tracker-records-v1';
+
+    const form = document.getElementById('defaultForm');
+    const recordIdInput = document.getElementById('recordId');
+    const issuerInput = document.getElementById('issuer');
+    const pvoInput = document.getElementById('pvo');
+    const debtInput = document.getElementById('debt');
+    const dateInput = document.getElementById('date');
+    const resetBtn = document.getElementById('resetBtn');
+    const submitBtn = document.getElementById('submitBtn');
+    const formTitle = document.getElementById('formTitle');
+
+    const totalDefaultsEl = document.getElementById('totalDefaults');
+    const totalIssuersEl = document.getElementById('totalIssuers');
+    const totalDebtEl = document.getElementById('totalDebt');
+    const tableBody = document.getElementById('tableBody');
+    const emptyState = document.getElementById('emptyState');
+    const tableWrap = document.getElementById('tableWrap');
+    const searchInput = document.getElementById('searchInput');
+
+    let records = loadRecords();
+
+    function loadRecords() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch (error) {
+        console.error('Ошибка чтения данных:', error);
+        return [];
+      }
+    }
+
+    function saveRecords() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    }
+
+    function normalizeIssuer(value) {
+      return String(value || '').trim().toLowerCase();
+    }
+
+    function formatCurrency(value) {
+      return new Intl.NumberFormat('ru-RU', {
+        style: 'currency',
+        currency: 'RUB',
+        maximumFractionDigits: 2,
+      }).format(Number(value) || 0);
+    }
+
+    function formatDate(value) {
+      if (!value) return '—';
+      const date = new Date(value + 'T00:00:00');
+      return new Intl.DateTimeFormat('ru-RU').format(date);
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function calculateStats(items) {
+      const uniqueIssuers = new Set();
+      let totalDebt = 0;
+
+      for (const item of items) {
+        uniqueIssuers.add(normalizeIssuer(item.issuer));
+        totalDebt += Number(item.debt) || 0;
+      }
+
+      return {
+        totalDefaults: items.length,
+        totalIssuers: Array.from(uniqueIssuers).filter(Boolean).length,
+        totalDebt,
+      };
+    }
+
+    function getFilteredRecords() {
+      const query = searchInput.value.trim().toLowerCase();
+      if (!query) return [...records];
+
+      return records.filter((item) => {
+        return String(item.issuer).toLowerCase().includes(query)
+          || String(item.pvo || '').toLowerCase().includes(query);
+      });
+    }
+
+    function render() {
+      const filtered = getFilteredRecords().sort((a, b) => {
+        if (a.date === b.date) return a.issuer.localeCompare(b.issuer, 'ru');
+        return a.date < b.date ? 1 : -1;
+      });
+
+      const stats = calculateStats(records);
+      totalDefaultsEl.textContent = stats.totalDefaults;
+      totalIssuersEl.textContent = stats.totalIssuers;
+      totalDebtEl.textContent = formatCurrency(stats.totalDebt);
+
+      if (filtered.length === 0) {
+        tableBody.innerHTML = '';
+        tableWrap.style.display = 'none';
+        emptyState.style.display = 'block';
+        emptyState.textContent = records.length === 0
+          ? 'Пока нет записей. Добавьте первый случай дефолта слева.'
+          : 'По вашему запросу ничего не найдено.';
+        return;
+      }
+
+      tableBody.innerHTML = filtered.map((item) => {
+        return `
+          <tr>
+            <td>${escapeHtml(item.issuer)}</td>
+            <td>${item.pvo ? escapeHtml(item.pvo) : '—'}</td>
+            <td>${formatCurrency(item.debt)}</td>
+            <td>${formatDate(item.date)}</td>
+            <td>
+              <div class="row-actions">
+                <button class="secondary" type="button" onclick="editRecord('${item.id}')">Изменить</button>
+                <button class="danger" type="button" onclick="deleteRecord('${item.id}')">Удалить</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      tableWrap.style.display = 'block';
+      emptyState.style.display = 'none';
+    }
+
+    function resetForm() {
+      form.reset();
+      recordIdInput.value = '';
+      formTitle.textContent = 'Добавить дефолт';
+      submitBtn.textContent = 'Сохранить';
+      issuerInput.focus();
+    }
+
+    function upsertRecord(event) {
+      event.preventDefault();
+
+      const issuer = issuerInput.value.trim();
+      const pvo = pvoInput.value.trim();
+      const debt = Number(debtInput.value);
+      const date = dateInput.value;
+      const existingId = recordIdInput.value;
+
+      if (!issuer || !date || Number.isNaN(debt) || debt < 0) {
+        alert('Пожалуйста, корректно заполните обязательные поля.');
+        return;
+      }
+
+      const payload = {
+        id: existingId || crypto.randomUUID(),
+        issuer,
+        pvo,
+        debt,
+        date,
+      };
+
+      if (existingId) {
+        records = records.map((item) => item.id === existingId ? payload : item);
+      } else {
+        records.push(payload);
+      }
+
+      saveRecords();
+      render();
+      resetForm();
+    }
+
+    window.editRecord = function editRecord(id) {
+      const item = records.find((record) => record.id === id);
+      if (!item) return;
+
+      recordIdInput.value = item.id;
+      issuerInput.value = item.issuer;
+      pvoInput.value = item.pvo || '';
+      debtInput.value = item.debt;
+      dateInput.value = item.date;
+      formTitle.textContent = 'Изменить запись';
+      submitBtn.textContent = 'Сохранить изменения';
+      issuerInput.focus();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.deleteRecord = function deleteRecord(id) {
+      const item = records.find((record) => record.id === id);
+      if (!item) return;
+
+      const confirmed = window.confirm(`Удалить запись по эмитенту «${item.issuer}»?`);
+      if (!confirmed) return;
+
+      records = records.filter((record) => record.id !== id);
+      saveRecords();
+      render();
+
+      if (recordIdInput.value === id) {
+        resetForm();
+      }
+    };
+
+    form.addEventListener('submit', upsertRecord);
+    resetBtn.addEventListener('click', resetForm);
+    searchInput.addEventListener('input', render);
+
+    render();
+  </script>
+</body>
+</html>
